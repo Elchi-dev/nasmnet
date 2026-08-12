@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions are numbered vX.0 for a major change, vX.Y for a smaller feature and
 vX.Y.Z for a fix.
 
+## [v1.1.1] - 2026-08-12
+
+### Fixed
+- A signal arriving between the shutdown flag being read and `accept` being
+  entered was lost, and the server then blocked with nothing left to wake it.
+  It stayed up until a client happened to connect and otherwise had to be
+  killed. SIGINT and SIGTERM are now blocked around the flag check and handed
+  to `ppoll`, which unblocks them as part of the wait itself, so a signal in
+  that gap is held pending rather than dropped.
+- The listening socket is non blocking. A connection reset between `poll`
+  reporting it and `accept` running would previously drop the server back into
+  a blocking `accept`.
+
+### Added
+- A shutdown timing test that signals fifteen servers at varying moments and
+  requires every one of them to exit.
+- ADR 0007, covering the race, the fix and why the self pipe trick was not
+  used.
+
 ## [v1.1] - 2026-08-12
 
 Signal handling. The server can now be stopped properly and can no longer be
@@ -57,5 +76,6 @@ no dependencies.
   register convention, the blocking accept loop, the absence of TLS and the
   approach to testing.
 
+[v1.1.1]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.1.1
 [v1.1]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.1
 [v1.0]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.0
