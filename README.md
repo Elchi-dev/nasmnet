@@ -26,6 +26,7 @@ Then:
 ```
 make            # build bin/nasmnetd
 make test       # build everything and run all the tests
+make debug      # build with dwarf line information for gdb
 make clean      # remove build/ and bin/
 make install    # install to /usr/local/bin, override with PREFIX=
 ```

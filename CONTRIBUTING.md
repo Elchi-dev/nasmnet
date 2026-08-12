@@ -14,6 +14,45 @@ Check the return value of every syscall you add. `syscall` puts a negative
 errno in `rax` and there is no library underneath to notice a failure for you.
 An unchecked call is the most common way something breaks quietly here.
 
+## Debugging a crash
+
+`make debug` rebuilds with dwarf line information. Without it gdb can only tell
+you which symbol you were inside and how far into it, which for a routine of
+any length is not much. With it you get the line.
+
+```
+make debug
+gdb ./bin/nasmnetd
+```
+
+Remember to `make clean` afterwards, because the object files carry the debug
+information and a plain `make` will not rebuild them just because the flags
+changed.
+
+Core dumps are worth turning on before you need one. Nothing in the program
+enables them, since it is the kernel that writes the file and the shell that
+decides whether it is allowed to.
+
+```
+ulimit -c unlimited
+```
+
+On Arch and anywhere else running systemd the dump goes to the journal rather
+than the working directory, and `coredumpctl` is how you reach it:
+
+```
+coredumpctl list nasmnetd
+coredumpctl gdb nasmnetd
+```
+
+Elsewhere `/proc/sys/kernel/core_pattern` decides where the file lands.
+
+A fault with no libc underneath usually means one of a small number of things.
+A register that a routine was supposed to preserve and did not, an offset into
+a structure that is wrong by a few bytes, or a syscall whose failure went
+unchecked and left a negative number being used as a file descriptor or a
+pointer.
+
 ## Style
 
 Read `docs/adr/0002-register-convention.md` before writing a routine. Arguments
