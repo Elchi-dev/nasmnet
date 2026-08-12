@@ -77,7 +77,7 @@ roundtrip() {
     local payload="$1"
     exec 3<>"/dev/tcp/127.0.0.1/$PORT" || return 1
     printf '%s' "$payload" >&3
-    head -c "${#payload}" <&3
+    timeout 5 head -c "${#payload}" <&3
     exec 3<&-
     exec 3>&-
 }
@@ -129,7 +129,7 @@ line two" "$got"
 printf 'abc\000def' >"$TMP/nul.bin"
 exec 3<>"/dev/tcp/127.0.0.1/$PORT"
 cat "$TMP/nul.bin" >&3
-head -c 7 <&3 >"$TMP/nul.out"
+timeout 5 head -c 7 <&3 >"$TMP/nul.out"
 exec 3<&-
 exec 3>&-
 if cmp -s "$TMP/nul.bin" "$TMP/nul.out"; then
@@ -140,7 +140,7 @@ fi
 
 head -c 262144 /dev/urandom >"$TMP/big.bin"
 exec 3<>"/dev/tcp/127.0.0.1/$PORT"
-head -c 262144 <&3 >"$TMP/big.out" &
+timeout 20 head -c 262144 <&3 >"$TMP/big.out" &
 READER=$!
 cat "$TMP/big.bin" >&3
 wait $READER
@@ -157,6 +157,41 @@ exec 3<&-
 exec 3>&-
 got="$(roundtrip "still alive")"
 check "survives a client that closes without sending" "still alive" "$got"
+
+echo
+echo "concurrency"
+
+exec 4<>"/dev/tcp/127.0.0.1/$PORT"
+printf 'idle' >&4
+timeout 5 head -c 4 <&4 >/dev/null
+got="$(roundtrip "not blocked")"
+check "an idle client does not hold up anyone else" "not blocked" "$got"
+
+printf 'now speaking' >&4
+got="$(timeout 5 head -c 12 <&4)"
+check "the idle client is still served when it speaks" "now speaking" "$got"
+exec 4<&-
+exec 4>&-
+
+declare -A FDS
+served=0
+for i in $(seq 1 30); do
+    exec {fd}<>"/dev/tcp/127.0.0.1/$PORT"
+    FDS[$i]=$fd
+    printf 'client%03d' "$i" >&"$fd"
+done
+for i in $(seq 30 -1 1); do
+    fd=${FDS[$i]}
+    want="$(printf 'client%03d' "$i")"
+    got="$(timeout 5 head -c 9 <&"$fd")"
+    [ "$got" = "$want" ] && served=$((served + 1))
+    exec {fd}<&-
+    exec {fd}>&-
+done
+check "30 clients at once, read back in reverse order" "30" "$served"
+
+got="$(roundtrip "healthy")"
+check "the server is healthy after the burst" "healthy" "$got"
 
 echo
 echo "signals"
@@ -192,7 +227,7 @@ shutdown_case() {
     if [ "$hold" = "hold" ]; then
         exec 8<>"/dev/tcp/127.0.0.1/$port"
         printf 'x' >&8
-        head -c 1 <&8 >/dev/null
+        timeout 5 head -c 1 <&8 >/dev/null
     fi
     kill -"$sig" "$pid" 2>/dev/null
     wait "$pid"

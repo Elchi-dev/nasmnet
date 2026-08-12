@@ -9,6 +9,10 @@
 %define SYS_RT_SIGPROCMASK 14
 %define SYS_FCNTL       72
 %define SYS_PPOLL       271
+%define SYS_EPOLL_CREATE1 291
+%define SYS_EPOLL_CTL   233
+%define SYS_EPOLL_PWAIT 281
+%define SYS_ACCEPT4     288
 %define SYS_SOCKET      41
 %define SYS_ACCEPT      43
 %define SYS_BIND        49
@@ -35,6 +39,22 @@
 %define F_SETFL         4
 %define O_NONBLOCK      0x800
 %define POLLIN          1
+
+%define EPOLL_CTL_ADD   1
+%define EPOLL_CTL_DEL   2
+%define EPOLL_CTL_MOD   3
+%define EPOLLIN         0x001
+%define EPOLLOUT        0x004
+%define EPOLLERR        0x008
+%define EPOLLHUP        0x010
+%define EPOLLRDHUP      0x2000
+%define MAX_EVENTS      64
+%define SOCK_NONBLOCK   0x800
+
+; The kernel packs this structure on x86_64, so data sits at offset 4
+; and is not aligned.
+%define EV_SIZE         12
+%define LISTEN_TAG      0xFFFFFFFFFFFFFFFF
 
 %define STDOUT          1
 %define STDERR          2

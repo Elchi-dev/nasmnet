@@ -15,6 +15,14 @@ extern sig_ignore
 extern sig_catch
 extern sig_block
 extern sig_unblock
+extern conn_init
+extern conn_alloc
+extern conn_free
+extern conn_ptr
+extern ep_create
+extern ep_add
+extern ep_mod
+extern ep_del
 
 section .text
 
@@ -99,6 +107,22 @@ _start:
     test rax, rax
     js .fcntl_failed
 
+    call ep_create
+    test rax, rax
+    js .epoll_failed
+    mov r14, rax
+    mov [epfd], rax
+
+    call conn_init
+
+    mov rdi, r14
+    mov rsi, r12
+    mov rdx, EPOLLIN
+    mov rcx, LISTEN_TAG
+    call ep_add
+    test rax, rax
+    js .epoll_failed
+
     mov rdi, STDOUT
     lea rsi, [s_listening]
     call put_str
@@ -109,66 +133,77 @@ _start:
     lea rsi, [s_nl]
     call put_str
 
-.accept_loop:
+.event_loop:
     mov rdi, STOPMASK
     call sig_block
 
     cmp byte [stopping], 0
     jne .shutdown
 
-    lea rdi, [pfd]
-    mov [rdi], r12d
-    mov word [rdi + 4], POLLIN
-    mov word [rdi + 6], 0
-    mov rsi, 1
-    xor rdx, rdx
-    lea r10, [emptymask]
-    mov r8, 8
-    mov rax, SYS_PPOLL
+    mov rax, SYS_EPOLL_PWAIT
+    mov rdi, r14
+    lea rsi, [events]
+    mov rdx, MAX_EVENTS
+    mov r10, -1
+    lea r8, [emptymask]
+    mov r9, 8
     syscall
-    mov rbx, rax
+    mov r15, rax
 
     mov rdi, STOPMASK
     call sig_unblock
 
-    test rbx, rbx
-    jle .accept_loop
+    test r15, r15
+    jle .event_loop
 
-    mov rax, SYS_ACCEPT
-    mov rdi, r12
-    xor rsi, rsi
-    xor rdx, rdx
-    syscall
-    test rax, rax
-    jns .accepted
-    cmp rax, -EINTR
-    je .accept_loop
-    cmp rax, -ECONNABORTED
-    je .accept_loop
-    cmp rax, -EAGAIN
-    je .accept_loop
-    lea rsi, [s_accept]
-    jmp fail_syscall
+    xor rbx, rbx
+.next_event:
+    cmp rbx, r15
+    jae .event_loop
+
+    imul rax, rbx, EV_SIZE
+    lea rax, [events + rax]
+    mov r13d, [rax]
+    mov rbp, [rax + 4]
+
+    cmp rbp, LISTEN_TAG
+    je .incoming
+
+    mov rdi, rbp
+    mov rsi, r13
+    call serve_event
+    inc rbx
+    jmp .next_event
+
+.incoming:
+    call accept_ready
+    inc rbx
+    jmp .next_event
 
 .shutdown:
     mov rdi, STDOUT
     lea rsi, [s_stopping]
     call put_str
+
+    xor rbx, rbx
+.close_each:
+    mov rdi, rbx
+    call conn_ptr
+    mov edi, [rax + conn.fd]
+    test edi, edi
+    jz .close_next
+    mov rax, SYS_CLOSE
+    syscall
+.close_next:
+    inc rbx
+    cmp rbx, MAX_CONNS
+    jb .close_each
+
     mov rax, SYS_CLOSE
     mov rdi, r12
     syscall
     xor rdi, rdi
     jmp exit_now
-.accepted:
-    mov rbx, rax
-
-    mov rdi, rbx
-    call echo_connection
-
-    mov rax, SYS_CLOSE
-    mov rdi, rbx
-    syscall
-    jmp .accept_loop
 
 .bad_port:
     mov rdi, STDERR
@@ -197,6 +232,10 @@ _start:
     lea rsi, [s_fcntl]
     jmp fail_syscall
 
+.epoll_failed:
+    lea rsi, [s_epoll]
+    jmp fail_syscall
+
 fail_syscall:
     push rax
     mov rdi, STDERR
@@ -210,6 +249,160 @@ fail_syscall:
     call put_str
     mov rdi, 2
     jmp exit_now
+
+accept_ready:
+    push rbx
+    push r13
+.again:
+    mov rax, SYS_ACCEPT4
+    mov rdi, r12
+    xor rsi, rsi
+    xor rdx, rdx
+    mov r10, SOCK_NONBLOCK
+    syscall
+    test rax, rax
+    js .done
+    mov r13, rax
+
+    call conn_alloc
+    test rax, rax
+    js .no_room
+    mov rbx, rax
+
+    mov rdi, rbx
+    call conn_ptr
+    mov [rax + conn.fd], r13d
+    mov dword [rax + conn.state], CONN_READING
+    mov qword [rax + conn.off], 0
+    mov qword [rax + conn.len], 0
+
+    mov rdi, [epfd]
+    mov rsi, r13
+    mov rdx, EPOLLIN | EPOLLRDHUP
+    mov rcx, rbx
+    call ep_add
+    test rax, rax
+    js .add_failed
+    jmp .again
+
+.add_failed:
+    mov rdi, rbx
+    call conn_ptr
+    mov dword [rax + conn.fd], 0
+    mov rdi, rbx
+    call conn_free
+
+.no_room:
+    mov rax, SYS_CLOSE
+    mov rdi, r13
+    syscall
+    jmp .again
+
+.done:
+    pop r13
+    pop rbx
+    ret
+
+serve_event:
+    push rbx
+    push r12
+    push r13
+    mov r12, rdi
+    mov r13, rsi
+    call conn_ptr
+    mov rbx, rax
+
+    test r13d, EPOLLERR | EPOLLHUP
+    jnz .close
+
+    cmp dword [rbx + conn.state], CONN_WRITING
+    je .writable
+
+    test r13d, EPOLLIN | EPOLLRDHUP
+    jz .done
+
+    mov rax, SYS_READ
+    mov edi, [rbx + conn.fd]
+    lea rsi, [rbx + conn.buf]
+    mov rdx, BUFSIZE
+    syscall
+    test rax, rax
+    jz .close
+    js .read_failed
+    mov [rbx + conn.len], rax
+    mov qword [rbx + conn.off], 0
+    jmp .flush
+
+.read_failed:
+    cmp rax, -EAGAIN
+    je .done
+    cmp rax, -EINTR
+    je .done
+    jmp .close
+
+.writable:
+    test r13d, EPOLLOUT
+    jz .done
+
+.flush:
+    mov rax, SYS_WRITE
+    mov edi, [rbx + conn.fd]
+    lea rsi, [rbx + conn.buf]
+    add rsi, [rbx + conn.off]
+    mov rdx, [rbx + conn.len]
+    sub rdx, [rbx + conn.off]
+    syscall
+    test rax, rax
+    js .write_failed
+    add [rbx + conn.off], rax
+    mov rax, [rbx + conn.off]
+    cmp rax, [rbx + conn.len]
+    jb .want_out
+
+    cmp dword [rbx + conn.state], CONN_READING
+    je .done
+    mov dword [rbx + conn.state], CONN_READING
+    mov rdi, [epfd]
+    mov esi, [rbx + conn.fd]
+    mov rdx, EPOLLIN | EPOLLRDHUP
+    mov rcx, r12
+    call ep_mod
+    jmp .done
+
+.want_out:
+    cmp dword [rbx + conn.state], CONN_WRITING
+    je .done
+    mov dword [rbx + conn.state], CONN_WRITING
+    mov rdi, [epfd]
+    mov esi, [rbx + conn.fd]
+    mov rdx, EPOLLOUT
+    mov rcx, r12
+    call ep_mod
+    jmp .done
+
+.write_failed:
+    cmp rax, -EAGAIN
+    je .want_out
+    cmp rax, -EINTR
+    je .flush
+    jmp .close
+
+.close:
+    mov rdi, [epfd]
+    mov esi, [rbx + conn.fd]
+    call ep_del
+    mov rax, SYS_CLOSE
+    mov edi, [rbx + conn.fd]
+    syscall
+    mov dword [rbx + conn.fd], 0
+    mov rdi, r12
+    call conn_free
+
+.done:
+    pop r13
+    pop r12
+    pop rbx
+    ret
 
 on_shutdown:
     mov byte [stopping], 1
@@ -289,6 +482,7 @@ s_bind:         db "bind failed: ", 0
 s_listen:       db "listen failed: ", 0
 s_accept:       db "accept failed: ", 0
 s_fcntl:        db "fcntl failed: ", 0
+s_epoll:        db "epoll setup failed: ", 0
 s_stopping:     db "nasmnetd shutting down", 10, 0
 s_flag_help:    db "--help", 0
 s_flag_h:       db "-h", 0
@@ -307,6 +501,7 @@ section .bss
 stopping:  resb 1
 align 8
 emptymask: resq 1
-pfd:       resb 8
+epfd:      resq 1
+events:    resb EV_SIZE * MAX_EVENTS
 addr:   resb 16
 buf:    resb BUFSIZE
