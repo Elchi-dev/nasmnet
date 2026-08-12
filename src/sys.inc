@@ -61,7 +61,9 @@
 
 %define BACKLOG         128
 %define BUFSIZE         4096
+%ifndef MAX_CONNS
 %define MAX_CONNS       1024
+%endif
 
 %define CONN_READING    0
 %define CONN_WRITING    1

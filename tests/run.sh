@@ -3,6 +3,7 @@ set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$ROOT/bin/nasmnetd"
+SMALL="$ROOT/bin/nasmnetd-small"
 PORT="${TEST_PORT:-19080}"
 TMP="$(mktemp -d)"
 SRV=""
@@ -192,6 +193,67 @@ check "30 clients at once, read back in reverse order" "30" "$served"
 
 got="$(roundtrip "healthy")"
 check "the server is healthy after the burst" "healthy" "$got"
+
+echo
+echo "connection limit"
+
+if [ -x "$SMALL" ]; then
+    LIMPORT=$((PORT + 40))
+    "$SMALL" "$LIMPORT" >"$TMP/small.log" 2>&1 &
+    SMALLPID=$!
+    for _ in $(seq 1 50); do
+        if exec 9<>"/dev/tcp/127.0.0.1/$LIMPORT" 2>/dev/null; then
+            exec 9<&-
+            exec 9>&-
+            break
+        fi
+        sleep 0.1
+    done
+
+    declare -A LIM
+    filled=0
+    for i in 1 2 3 4; do
+        exec {fd}<>"/dev/tcp/127.0.0.1/$LIMPORT"
+        LIM[$i]=$fd
+        printf 'f%d' "$i" >&"$fd"
+        [ "$(timeout 5 head -c 2 <&"$fd")" = "f$i" ] && filled=$((filled + 1))
+    done
+    check "every slot in a full table is usable" "4" "$filled"
+
+    exec {over}<>"/dev/tcp/127.0.0.1/$LIMPORT"
+    printf 'over' >&"$over"
+    check "a connection past the limit is dropped" "" "$(timeout 3 head -c 4 <&"$over")"
+    exec {over}<&-
+    exec {over}>&-
+
+    fd=${LIM[1]}
+    exec {fd}<&-
+    exec {fd}>&-
+    unset "LIM[1]"
+    sleep 0.4
+
+    exec {again}<>"/dev/tcp/127.0.0.1/$LIMPORT"
+    printf 'again' >&"$again"
+    check "a freed slot is handed to the next client" "again" "$(timeout 5 head -c 5 <&"$again")"
+    exec {again}<&-
+    exec {again}>&-
+
+    for i in "${!LIM[@]}"; do
+        fd=${LIM[$i]}
+        exec {fd}<&-
+        exec {fd}>&-
+    done
+
+    if kill -0 "$SMALLPID" 2>/dev/null; then
+        ok "the server survives a full table"
+    else
+        no "the server survives a full table" "it exited"
+    fi
+    kill -9 "$SMALLPID" 2>/dev/null
+    wait "$SMALLPID" 2>/dev/null
+else
+    echo "  skip (bin/nasmnetd-small not built)"
+fi
 
 echo
 echo "signals"

@@ -8,6 +8,10 @@ UNIT     := bin/unit
 LIBOBJ   := build/io.o build/str.o build/err.o build/sig.o build/conn.o build/ep.o
 OBJ      := build/nasmnetd.o $(LIBOBJ)
 UNITOBJ  := build/unit.o $(LIBOBJ)
+SMALL    := bin/nasmnetd-small
+SMALLOBJ := build/small/nasmnetd.o build/small/io.o build/small/str.o \
+            build/small/err.o build/small/sig.o build/small/conn.o \
+            build/small/ep.o
 
 PREFIX  ?= /usr/local
 
@@ -31,6 +35,14 @@ build/%.o: src/%.asm
 	@mkdir -p build
 	$(AS) $(ASFLAGS) -o $@ $<
 
+$(SMALL): $(SMALLOBJ)
+	@mkdir -p bin
+	$(LD) $(LDFLAGS) -o $@ $(SMALLOBJ)
+
+build/small/%.o: src/%.asm
+	@mkdir -p build/small
+	$(AS) $(ASFLAGS) -DMAX_CONNS=4 -o $@ $<
+
 build/unit.o: tests/unit.asm src/sys.inc
 	@mkdir -p build
 	$(AS) $(ASFLAGS) -o $@ tests/unit.asm
@@ -46,7 +58,7 @@ test: unit integration
 unit: $(UNIT)
 	@$(UNIT)
 
-integration: $(BIN)
+integration: $(BIN) $(SMALL)
 	@tests/run.sh
 
 clean:
