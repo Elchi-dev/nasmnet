@@ -5,7 +5,7 @@ LDFLAGS := --build-id=none -z noexecstack -z separate-code
 
 BIN      := bin/nasmnetd
 UNIT     := bin/unit
-LIBOBJ   := build/io.o build/str.o build/err.o
+LIBOBJ   := build/io.o build/str.o build/err.o build/sig.o
 OBJ      := build/nasmnetd.o $(LIBOBJ)
 UNITOBJ  := build/unit.o $(LIBOBJ)
 
@@ -33,6 +33,7 @@ build/unit.o: tests/unit.asm src/sys.inc
 
 build/nasmnetd.o: src/nasmnetd.asm src/sys.inc
 build/io.o: src/io.asm src/sys.inc
+build/sig.o: src/sig.asm src/sys.inc
 
 test: unit integration
 

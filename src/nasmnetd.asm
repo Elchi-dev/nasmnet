@@ -11,6 +11,7 @@ extern put_err
 extern write_all
 extern parse_u16
 extern str_eq
+extern sig_ignore
 
 section .text
 
@@ -34,6 +35,9 @@ _start:
 
 .have_port:
     mov r13, rax
+
+    mov rdi, SIGPIPE
+    call sig_ignore
 
     mov rax, SYS_SOCKET
     mov rdi, AF_INET

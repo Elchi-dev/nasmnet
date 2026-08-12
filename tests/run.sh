@@ -136,6 +136,20 @@ got="$(roundtrip "still alive")"
 check "survives a client that closes without sending" "still alive" "$got"
 
 echo
+echo "signals"
+
+kill -PIPE "$SRV" 2>/dev/null
+sleep 0.3
+if kill -0 "$SRV" 2>/dev/null; then
+    ok "ignores SIGPIPE"
+else
+    no "ignores SIGPIPE" "the server exited"
+fi
+
+got="$(roundtrip "after sigpipe")"
+check "keeps serving after SIGPIPE" "after sigpipe" "$got"
+
+echo
 echo "socket errors"
 
 "$BIN" "$PORT" >"$TMP/busy.log" 2>&1

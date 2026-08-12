@@ -4,6 +4,8 @@
 %define SYS_READ        0
 %define SYS_WRITE       1
 %define SYS_CLOSE       3
+%define SYS_RT_SIGACTION 13
+%define SYS_RT_SIGRETURN 15
 %define SYS_SOCKET      41
 %define SYS_ACCEPT      43
 %define SYS_BIND        49
@@ -15,6 +17,12 @@
 %define SOCK_STREAM     1
 %define SOL_SOCKET      1
 %define SO_REUSEADDR    2
+
+%define SIG_IGN         1
+%define SA_RESTORER     0x04000000
+%define SIGINT          2
+%define SIGPIPE         13
+%define SIGTERM         15
 
 %define STDOUT          1
 %define STDERR          2
