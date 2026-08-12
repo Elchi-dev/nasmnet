@@ -1,0 +1,65 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nasm
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm
+
+      - name: Build
+        run: make
+
+      - name: Unit tests
+        run: make unit
+
+      - name: Integration tests
+        run: make integration
+
+      - name: Confirm the binary has no dynamic dependencies
+        run: |
+          file bin/nasmnetd
+          if ldd bin/nasmnetd 2>/dev/null | grep -q '=>'; then
+            echo "the binary picked up a shared library"
+            exit 1
+          fi
+
+      - name: Report the binary size
+        run: ls -l bin/nasmnetd
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nasmnetd
+          path: bin/nasmnetd
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shellcheck
+        run: shellcheck tests/run.sh
+
+      - name: Confirm the build is reproducible
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm
+          make
+          sha256sum bin/nasmnetd > first.txt
+          make clean
+          make
+          sha256sum bin/nasmnetd > second.txt
+          diff first.txt second.txt

@@ -1,0 +1,38 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nasm
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm
+
+      - name: Build and test
+        run: make test
+
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          mkdir -p "dist/nasmnet-${VERSION}"
+          cp bin/nasmnetd README.md LICENSE CHANGELOG.md "dist/nasmnet-${VERSION}/"
+          tar -czf "nasmnet-${VERSION}-x86_64-linux.tar.gz" -C dist "nasmnet-${VERSION}"
+          sha256sum "nasmnet-${VERSION}-x86_64-linux.tar.gz" > SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            nasmnet-*-x86_64-linux.tar.gz
+            SHA256SUMS
+          generate_release_notes: false
