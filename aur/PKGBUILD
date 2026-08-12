@@ -1,0 +1,29 @@
+# Maintainer: Elchi <github@elchi.dev>
+pkgname=nasmnet
+pkgver=1.0
+pkgrel=1
+pkgdesc="TCP server written in x86_64 assembly with no libc and no dependencies"
+arch=('x86_64')
+url="https://github.com/Elchi-dev/nasmnet"
+license=('MIT')
+makedepends=('nasm')
+checkdepends=('bash')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('cfa70ddbdce8e464e28c90ef9020fcba7133f697a81eca4de02263fe2272dc75')
+
+build() {
+	cd "$pkgname-$pkgver"
+	make
+}
+
+check() {
+	cd "$pkgname-$pkgver"
+	make test
+}
+
+package() {
+	cd "$pkgname-$pkgver"
+	make DESTDIR="$pkgdir" PREFIX=/usr install
+	install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+	install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}
