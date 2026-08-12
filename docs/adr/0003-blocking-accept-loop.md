@@ -1,6 +1,6 @@
 # 0003. Blocking accept loop before epoll
 
-Status: Accepted
+Status: Superseded by 0008
 Date: 2026-08-12
 
 ## Context

@@ -9,8 +9,9 @@ where it is.
 | ------ | ----- | ------ |
 | [0001](0001-raw-syscalls-no-libc.md) | Raw syscalls with no libc | Accepted |
 | [0002](0002-register-convention.md) | Register and calling convention | Accepted |
-| [0003](0003-blocking-accept-loop.md) | Blocking accept loop before epoll | Accepted |
+| [0003](0003-blocking-accept-loop.md) | Blocking accept loop before epoll | Superseded by 0008 |
 | [0004](0004-no-tls.md) | No TLS, run behind a reverse proxy | Accepted |
 | [0005](0005-tests-without-a-framework.md) | Tests without a framework | Accepted |
 | [0006](0006-signal-handling.md) | Signal handling with a flag | Accepted |
 | [0007](0007-signal-race.md) | Blocking signals around the wait | Accepted |
+| [0008](0008-epoll-event-loop.md) | An epoll event loop with a fixed slot table | Accepted |
