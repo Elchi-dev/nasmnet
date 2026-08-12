@@ -13,6 +13,8 @@ extern parse_u16
 extern str_eq
 extern sig_ignore
 extern sig_catch
+extern sig_block
+extern sig_unblock
 
 section .text
 
@@ -89,6 +91,14 @@ _start:
     test rax, rax
     js .listen_failed
 
+    mov rax, SYS_FCNTL
+    mov rdi, r12
+    mov rsi, F_SETFL
+    mov rdx, O_NONBLOCK
+    syscall
+    test rax, rax
+    js .fcntl_failed
+
     mov rdi, STDOUT
     lea rsi, [s_listening]
     call put_str
@@ -100,8 +110,29 @@ _start:
     call put_str
 
 .accept_loop:
+    mov rdi, STOPMASK
+    call sig_block
+
     cmp byte [stopping], 0
     jne .shutdown
+
+    lea rdi, [pfd]
+    mov [rdi], r12d
+    mov word [rdi + 4], POLLIN
+    mov word [rdi + 6], 0
+    mov rsi, 1
+    xor rdx, rdx
+    lea r10, [emptymask]
+    mov r8, 8
+    mov rax, SYS_PPOLL
+    syscall
+    mov rbx, rax
+
+    mov rdi, STOPMASK
+    call sig_unblock
+
+    test rbx, rbx
+    jle .accept_loop
 
     mov rax, SYS_ACCEPT
     mov rdi, r12
@@ -113,6 +144,8 @@ _start:
     cmp rax, -EINTR
     je .accept_loop
     cmp rax, -ECONNABORTED
+    je .accept_loop
+    cmp rax, -EAGAIN
     je .accept_loop
     lea rsi, [s_accept]
     jmp fail_syscall
@@ -158,6 +191,10 @@ _start:
 
 .listen_failed:
     lea rsi, [s_listen]
+    jmp fail_syscall
+
+.fcntl_failed:
+    lea rsi, [s_fcntl]
     jmp fail_syscall
 
 fail_syscall:
@@ -251,6 +288,7 @@ s_setsockopt:   db "setsockopt failed: ", 0
 s_bind:         db "bind failed: ", 0
 s_listen:       db "listen failed: ", 0
 s_accept:       db "accept failed: ", 0
+s_fcntl:        db "fcntl failed: ", 0
 s_stopping:     db "nasmnetd shutting down", 10, 0
 s_flag_help:    db "--help", 0
 s_flag_h:       db "-h", 0
@@ -266,6 +304,9 @@ section .data
 one:    dd 1
 
 section .bss
-stopping: resb 1
+stopping:  resb 1
+align 8
+emptymask: resq 1
+pfd:       resb 8
 addr:   resb 16
 buf:    resb BUFSIZE

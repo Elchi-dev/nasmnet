@@ -196,6 +196,31 @@ check "first run on the reuse port exits cleanly" "0" "$rc"
 rc="$(shutdown_case TERM $((PORT + 4)) idle)"
 check "the port is free again straight after shutdown" "0" "$rc"
 
+hung=0
+for i in $(seq 1 15); do
+    port=$((PORT + 10 + i))
+    "$BIN" "$port" >/dev/null 2>&1 &
+    pid=$!
+    sleep "0.0$((RANDOM % 90 + 10))"
+    kill -TERM "$pid" 2>/dev/null
+    waited=0
+    while kill -0 "$pid" 2>/dev/null; do
+        sleep 0.2
+        waited=$((waited + 1))
+        if [ "$waited" -gt 15 ]; then
+            kill -9 "$pid" 2>/dev/null
+            hung=1
+            break
+        fi
+    done
+    wait "$pid" 2>/dev/null
+done
+if [ "$hung" -eq 0 ]; then
+    ok "exits whenever the signal lands, across 15 runs"
+else
+    no "exits whenever the signal lands, across 15 runs" "a run had to be killed"
+fi
+
 echo
 echo "socket errors"
 

@@ -6,6 +6,9 @@
 %define SYS_CLOSE       3
 %define SYS_RT_SIGACTION 13
 %define SYS_RT_SIGRETURN 15
+%define SYS_RT_SIGPROCMASK 14
+%define SYS_FCNTL       72
+%define SYS_PPOLL       271
 %define SYS_SOCKET      41
 %define SYS_ACCEPT      43
 %define SYS_BIND        49
@@ -23,6 +26,15 @@
 %define SIGINT          2
 %define SIGPIPE         13
 %define SIGTERM         15
+%define SIG_BLOCK       0
+%define SIG_UNBLOCK     1
+
+; Bit n-1 stands for signal n, so SIGINT and SIGTERM together.
+%define STOPMASK        0x4002
+
+%define F_SETFL         4
+%define O_NONBLOCK      0x800
+%define POLLIN          1
 
 %define STDOUT          1
 %define STDERR          2
@@ -31,6 +43,7 @@
 %define BUFSIZE         4096
 
 %define EINTR           4
+%define EAGAIN          11
 %define ECONNABORTED    103
 
 struc sockaddr_in
