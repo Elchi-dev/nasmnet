@@ -293,7 +293,7 @@ s_stopping:     db "nasmnetd shutting down", 10, 0
 s_flag_help:    db "--help", 0
 s_flag_h:       db "-h", 0
 s_flag_version: db "--version", 0
-s_version:      db "nasmnetd 1.1.1", 10, 0
+s_version:      db "nasmnetd 1.1.2", 10, 0
 s_usage:        db "usage: nasmnetd [port]", 10, 10
                 db "Echoes back every byte it receives on a TCP connection.", 10
                 db "The port defaults to 8080 when no argument is given.", 10, 10

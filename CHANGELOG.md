@@ -6,6 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions are numbered vX.0 for a major change, vX.Y for a smaller feature and
 vX.Y.Z for a fix.
 
+## [v1.1.2] - 2026-08-12
+
+Tooling only. The server itself is unchanged.
+
+### Added
+- `make debug`, which rebuilds with dwarf line information so gdb can point at
+  the line that faulted instead of an offset into a symbol. The default build
+  is unchanged and stays without it.
+- The test harness turns an exit above 128 into the signal that caused it, so a
+  crash reports `killed by SIGSEGV` rather than `139`.
+- A check that the long running server survived the whole suite, since a crash
+  partway through previously surfaced as an unrelated socket failure later on.
+- Notes in CONTRIBUTING on enabling core dumps, reaching them with
+  `coredumpctl` on systemd, and the handful of mistakes that usually cause a
+  fault when there is no libc underneath.
+
 ## [v1.1.1] - 2026-08-12
 
 ### Fixed
@@ -76,6 +92,7 @@ no dependencies.
   register convention, the blocking accept loop, the absence of TLS and the
   approach to testing.
 
+[v1.1.2]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.1.1
 [v1.1]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.1
 [v1.0]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.0
