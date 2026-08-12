@@ -86,7 +86,7 @@ roundtrip() {
 echo "argument handling"
 
 out="$("$BIN" --version)"
-check "--version prints the version" "nasmnetd 1.1.2" "$out"
+check "--version prints the version" "nasmnetd 2.0" "$out"
 
 "$BIN" --help >/dev/null 2>&1
 check "--help exits zero" "0" "$?"

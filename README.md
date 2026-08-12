@@ -2,7 +2,9 @@
 
 A TCP server written in x86_64 assembly. No libc, no runtime, no dependencies. It talks to the Linux kernel directly through the `syscall` instruction and nothing else.
 
-The current release is an echo server: every byte you send it comes straight back. That is deliberately small. The point of v1 is to get the socket lifecycle, the error handling and the test harness right before anything is built on top of them. HTTP comes later, and it will sit on this code rather than replace it.
+The current release is an echo server: every byte you send it comes straight back. That is deliberately small. What is underneath it is not. It runs a single threaded epoll event loop over non blocking sockets and holds a thousand connections at once without a thread or a process for any of them.
+
+HTTP is next, and it sits on this code rather than replacing it.
 
 ```
 $ make
@@ -39,7 +41,14 @@ nasmnetd [port]
 
 The port defaults to 8080. It must be a plain number between 1 and 65535, and anything else is rejected before a socket is ever opened. `--help` and `--version` do what you would expect.
 
-The server binds `0.0.0.0` and handles one connection at a time. A second client will sit in the listen backlog until the first one disconnects. Concurrency is the v2 job and it is going to be an epoll event loop, not a process per connection.
+The server binds `0.0.0.0` and handles up to 1024 connections at once from a single thread. A connection that arrives with no slot free is closed straight away rather than left waiting.
+
+That limit is fixed when the binary is assembled, because the slot pool is the only sizeable thing the server reserves and there is no allocator anywhere in it. Each slot is a little over 4 KB, so the default costs about 4 MB of address space, none of which is touched until the slots are used. Build it smaller or larger if that is wrong for your machine:
+
+```
+make clean
+make ASFLAGS="-f elf64 -I src/ -w+all -DMAX_CONNS=64"
+```
 
 Exit codes:
 
@@ -62,7 +71,9 @@ When a syscall fails the server prints the call that failed and the errno by nam
 make test
 ```
 
-Two suites run. The unit tests are a separate assembly binary that exercises the pure helper routines, the string length and comparison, the port parser and the number formatter, against their edge cases. The integration tests are a bash script that starts a real server, opens real sockets through `/dev/tcp` and checks what comes back over the wire, including null bytes, a 256 KB payload and the error path when the port is already taken.
+Two suites run. The unit tests are a separate assembly binary that exercises the pure helper routines, the string length and comparison, the port parser, the number formatter and the slot allocator, against their edge cases. The integration tests are a bash script that starts a real server, opens real sockets through `/dev/tcp` and checks what comes back over the wire.
+
+That covers null bytes, a 256 KB payload, thirty simultaneous clients read back in the reverse of the order they connected, an idle client that must not hold anyone up, a deliberately tiny four slot build to fill the connection table, both shutdown signals, and the error path when the port is already taken.
 
 Neither suite needs anything installed. No test framework, no scripting language, no network access.
 
@@ -74,6 +85,8 @@ src/io.asm         write helpers that survive short writes and signals
 src/str.asm        string length, string compare, port parsing, number formatting
 src/err.asm        errno number to errno name
 src/sig.asm        signal installation, including the restorer x86_64 needs
+src/conn.asm       the connection slot table and its free list
+src/ep.asm         epoll registration helpers
 src/sys.inc        syscall numbers and socket constants
 tests/unit.asm     unit tests for the helper routines
 tests/run.sh       integration tests over a real socket
@@ -83,9 +96,8 @@ docs/adr/          why the design is the way it is
 ## Roadmap
 
 - **v1.0** blocking echo server, argument handling, errno reporting
-- **v1.1** signal handling and a clean shutdown on SIGINT and SIGTERM (current)
-- **v1.2** a matching client binary, useful on its own and used by the tests
-- **v2.0** an epoll event loop with non blocking sockets and many concurrent connections
+- **v1.1** signal handling and a clean shutdown on SIGINT and SIGTERM
+- **v2.0** an epoll event loop with non blocking sockets and many concurrent connections (current)
 - **v3.0** HTTP/1.1, a request parser, routing and real responses
 - **v3.1** static file serving through `sendfile`
 - **v4.0** IPv6 and dual stack

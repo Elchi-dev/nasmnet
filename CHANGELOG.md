@@ -6,6 +6,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions are numbered vX.0 for a major change, vX.Y for a smaller feature and
 vX.Y.Z for a fix.
 
+## [v2.0] - 2026-08-12
+
+The server handles many connections at once. It is a single threaded epoll
+event loop over non blocking sockets, with no thread or process per connection.
+
+### Added
+- An epoll event loop. Up to 1024 connections at a time by default, from one
+  thread.
+- A fixed pool of connection slots with a free list, so taking and returning a
+  slot is constant time and no memory is allocated while the server runs. Each
+  slot carries the descriptor, the state, a buffer and the offset and length of
+  anything still waiting to be written.
+- Partial writes are remembered. A connection with a buffer still going out
+  switches to waiting for EPOLLOUT and is not read from again until it drains,
+  which is what stops a slow reader from growing memory.
+- `MAX_CONNS` can be set at assembly time with `-DMAX_CONNS=`, since the slot
+  pool is the only sizeable reservation the server makes.
+- A connection arriving with no slot free is accepted and closed immediately
+  instead of being left in the backlog.
+- Shutdown closes every open connection before it exits.
+- Unit tests for the slot allocator, and integration tests for thirty
+  simultaneous clients, an idle client that must not block anyone, and a four
+  slot build used to fill the connection table.
+- ADR 0008, which supersedes 0003.
+
+### Changed
+- `ppoll` is replaced by `epoll_pwait`, which takes the same signal mask and
+  keeps the shutdown race from v1.1.1 closed by the same mechanism.
+- Every socket read in the test suite has a timeout, so a server that stops
+  answering fails the suite instead of hanging it.
+
 ## [v1.1.2] - 2026-08-12
 
 Tooling only. The server itself is unchanged.
@@ -92,6 +123,7 @@ no dependencies.
   register convention, the blocking accept loop, the absence of TLS and the
   approach to testing.
 
+[v2.0]: https://github.com/Elchi-dev/nasmnet/releases/tag/v2.0
 [v1.1.2]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.1.2
 [v1.1.1]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.1.1
 [v1.1]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.1
