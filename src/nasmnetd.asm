@@ -12,6 +12,7 @@ extern write_all
 extern parse_u16
 extern str_eq
 extern sig_ignore
+extern sig_catch
 
 section .text
 
@@ -38,6 +39,14 @@ _start:
 
     mov rdi, SIGPIPE
     call sig_ignore
+
+    mov rdi, SIGINT
+    lea rsi, [on_shutdown]
+    call sig_catch
+
+    mov rdi, SIGTERM
+    lea rsi, [on_shutdown]
+    call sig_catch
 
     mov rax, SYS_SOCKET
     mov rdi, AF_INET
@@ -91,6 +100,9 @@ _start:
     call put_str
 
 .accept_loop:
+    cmp byte [stopping], 0
+    jne .shutdown
+
     mov rax, SYS_ACCEPT
     mov rdi, r12
     xor rsi, rsi
@@ -104,6 +116,16 @@ _start:
     je .accept_loop
     lea rsi, [s_accept]
     jmp fail_syscall
+
+.shutdown:
+    mov rdi, STDOUT
+    lea rsi, [s_stopping]
+    call put_str
+    mov rax, SYS_CLOSE
+    mov rdi, r12
+    syscall
+    xor rdi, rdi
+    jmp exit_now
 .accepted:
     mov rbx, rax
 
@@ -152,6 +174,10 @@ fail_syscall:
     mov rdi, 2
     jmp exit_now
 
+on_shutdown:
+    mov byte [stopping], 1
+    ret
+
 echo_connection:
     push rbx
     mov rbx, rdi
@@ -173,6 +199,8 @@ echo_connection:
     jmp .read
 .maybe_retry:
     cmp rax, -EINTR
+    jne .done
+    cmp byte [stopping], 0
     je .read
 .done:
     pop rbx
@@ -223,6 +251,7 @@ s_setsockopt:   db "setsockopt failed: ", 0
 s_bind:         db "bind failed: ", 0
 s_listen:       db "listen failed: ", 0
 s_accept:       db "accept failed: ", 0
+s_stopping:     db "nasmnetd shutting down", 10, 0
 s_flag_help:    db "--help", 0
 s_flag_h:       db "-h", 0
 s_flag_version: db "--version", 0
@@ -237,5 +266,6 @@ section .data
 one:    dd 1
 
 section .bss
+stopping: resb 1
 addr:   resb 16
 buf:    resb BUFSIZE

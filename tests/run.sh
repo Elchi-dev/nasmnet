@@ -150,6 +150,53 @@ got="$(roundtrip "after sigpipe")"
 check "keeps serving after SIGPIPE" "after sigpipe" "$got"
 
 echo
+echo "shutdown"
+
+shutdown_case() {
+    local sig="$1"
+    local port="$2"
+    local hold="$3"
+    "$BIN" "$port" >"$TMP/shut.log" 2>&1 &
+    local pid=$!
+    for _ in $(seq 1 50); do
+        if exec 9<>"/dev/tcp/127.0.0.1/$port" 2>/dev/null; then
+            exec 9<&-
+            exec 9>&-
+            break
+        fi
+        sleep 0.1
+    done
+    if [ "$hold" = "hold" ]; then
+        exec 8<>"/dev/tcp/127.0.0.1/$port"
+        printf 'x' >&8
+        head -c 1 <&8 >/dev/null
+    fi
+    kill -"$sig" "$pid" 2>/dev/null
+    wait "$pid"
+    local rc=$?
+    if [ "$hold" = "hold" ]; then
+        exec 8<&- 2>/dev/null
+        exec 8>&- 2>/dev/null
+    fi
+    printf '%d' "$rc"
+}
+
+rc="$(shutdown_case TERM $((PORT + 1)) idle)"
+check "exits with code 0 on SIGTERM" "0" "$rc"
+check "says that it is shutting down" "nasmnetd shutting down" "$(tail -1 "$TMP/shut.log")"
+
+rc="$(shutdown_case INT $((PORT + 2)) idle)"
+check "exits with code 0 on SIGINT" "0" "$rc"
+
+rc="$(shutdown_case TERM $((PORT + 3)) hold)"
+check "shuts down while a connection is open" "0" "$rc"
+
+rc="$(shutdown_case TERM $((PORT + 4)) idle)"
+check "first run on the reuse port exits cleanly" "0" "$rc"
+rc="$(shutdown_case TERM $((PORT + 4)) idle)"
+check "the port is free again straight after shutdown" "0" "$rc"
+
+echo
 echo "socket errors"
 
 "$BIN" "$PORT" >"$TMP/busy.log" 2>&1

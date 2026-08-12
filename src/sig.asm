@@ -4,14 +4,14 @@ default rel
 %include "sys.inc"
 
 global sig_ignore
+global sig_catch
 
 section .text
 
 sig_ignore:
     mov rsi, SIG_IGN
-    jmp sig_install
 
-sig_install:
+sig_catch:
     lea rdx, [action]
     mov [rdx], rsi
     mov qword [rdx + 8], SA_RESTORER
