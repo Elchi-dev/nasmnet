@@ -41,10 +41,22 @@
 
 %define BACKLOG         128
 %define BUFSIZE         4096
+%define MAX_CONNS       1024
+
+%define CONN_READING    0
+%define CONN_WRITING    1
 
 %define EINTR           4
 %define EAGAIN          11
 %define ECONNABORTED    103
+
+struc conn
+    .fd     resd 1
+    .state  resd 1
+    .off    resq 1
+    .len    resq 1
+    .buf    resb BUFSIZE
+endstruc
 
 struc sockaddr_in
     .sin_family  resw 1

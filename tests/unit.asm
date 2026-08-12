@@ -12,6 +12,11 @@ extern u64_to_dec
 extern err_name
 extern put_str
 extern put_u64
+extern conn_init
+extern conn_alloc
+extern conn_free
+extern conn_ptr
+extern conn_live
 
 section .text
 
@@ -194,6 +199,118 @@ _start:
     lea rdi, [n_e_unknown]
     call report_str
 
+    call conn_init
+    call conn_live
+    mov rdi, rax
+    xor rsi, rsi
+    lea rdx, [n_c_empty]
+    call expect
+
+    call conn_alloc
+    mov r12, rax
+    cmp r12, 0
+    setge al
+    movzx rdi, al
+    mov rsi, 1
+    lea rdx, [n_c_first]
+    call expect
+
+    call conn_live
+    mov rdi, rax
+    mov rsi, 1
+    lea rdx, [n_c_one]
+    call expect
+
+    call conn_alloc
+    mov r13, rax
+    cmp r13, r12
+    setne al
+    movzx rdi, al
+    mov rsi, 1
+    lea rdx, [n_c_distinct]
+    call expect
+
+    mov rdi, r12
+    call conn_free
+    call conn_live
+    mov rdi, rax
+    mov rsi, 1
+    lea rdx, [n_c_afterfree]
+    call expect
+
+    call conn_alloc
+    mov rdi, rax
+    mov rsi, r12
+    lea rdx, [n_c_reuse]
+    call expect
+
+    call conn_init
+    xor r12, r12
+.drain:
+    call conn_alloc
+    cmp rax, 0
+    jl .drained
+    inc r12
+    cmp r12, MAX_CONNS + 8
+    jb .drain
+.drained:
+    mov rdi, r12
+    mov rsi, MAX_CONNS
+    lea rdx, [n_c_capacity]
+    call expect
+
+    call conn_alloc
+    mov rdi, rax
+    mov rsi, -1
+    lea rdx, [n_c_exhausted]
+    call expect
+
+    mov rdi, 7
+    call conn_free
+    call conn_alloc
+    mov rdi, rax
+    mov rsi, 7
+    lea rdx, [n_c_recycle]
+    call expect
+
+    call conn_init
+    xor rdi, rdi
+    call conn_ptr
+    mov r12, rax
+    mov rdi, 1
+    call conn_ptr
+    sub rax, r12
+    mov rdi, rax
+    mov rsi, conn_size
+    lea rdx, [n_c_stride]
+    call expect
+
+    mov rdi, MAX_CONNS
+    call conn_ptr
+    mov rdi, rax
+    xor rsi, rsi
+    lea rdx, [n_c_bounds]
+    call expect
+
+    xor rdi, rdi
+    call conn_ptr
+    mov dword [rax + conn.fd], 42
+    mov qword [rax + conn.len], 99
+    mov byte [rax + conn.buf], 'z'
+    xor rdi, rdi
+    call conn_ptr
+    mov edi, [rax + conn.fd]
+    mov rsi, 42
+    lea rdx, [n_c_field]
+    call expect
+
+    xor rdi, rdi
+    call conn_ptr
+    movzx rdi, byte [rax + conn.buf]
+    mov rsi, 'z'
+    lea rdx, [n_c_buf]
+    call expect
+
     mov rdi, STDOUT
     lea rsi, [s_nl]
     call put_str
@@ -339,6 +456,19 @@ n_d_max_len:    db "u64_to_dec writes twenty bytes for the maximum", 0
 n_d_max:        db "u64_to_dec of the largest u64", 0
 n_e_known:      db "err_name maps 98 to EADDRINUSE", 0
 n_e_unknown:    db "err_name falls back for an unlisted code", 0
+n_c_empty:      db "conn_init leaves no live slots", 0
+n_c_first:      db "conn_alloc hands out a usable index", 0
+n_c_one:        db "conn_live counts one slot", 0
+n_c_distinct:   db "conn_alloc does not hand out the same slot twice", 0
+n_c_afterfree:  db "conn_free drops the live count", 0
+n_c_reuse:      db "a freed slot is handed out again", 0
+n_c_capacity:   db "the table holds exactly MAX_CONNS slots", 0
+n_c_exhausted:  db "conn_alloc reports -1 when full", 0
+n_c_recycle:    db "a slot freed while full becomes available", 0
+n_c_stride:     db "slots are one conn_size apart", 0
+n_c_bounds:     db "conn_ptr rejects an index past the end", 0
+n_c_field:      db "a field written to a slot reads back", 0
+n_c_buf:        db "the slot buffer is writable", 0
 
 s_ok:           db "  ok   ", 0
 s_fail:         db "  FAIL ", 0
