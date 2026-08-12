@@ -12,3 +12,4 @@ where it is.
 | [0003](0003-blocking-accept-loop.md) | Blocking accept loop before epoll | Accepted |
 | [0004](0004-no-tls.md) | No TLS, run behind a reverse proxy | Accepted |
 | [0005](0005-tests-without-a-framework.md) | Tests without a framework | Accepted |
+| [0006](0006-signal-handling.md) | Signal handling with a flag | Accepted |
