@@ -26,6 +26,29 @@ no() {
     [ $# -gt 1 ] && printf '       %s\n' "$2"
 }
 
+signal_name() {
+    case "$1" in
+        2)  printf 'SIGINT' ;;
+        4)  printf 'SIGILL' ;;
+        6)  printf 'SIGABRT' ;;
+        7)  printf 'SIGBUS' ;;
+        8)  printf 'SIGFPE' ;;
+        9)  printf 'SIGKILL' ;;
+        11) printf 'SIGSEGV' ;;
+        13) printf 'SIGPIPE' ;;
+        15) printf 'SIGTERM' ;;
+        *)  printf 'signal %s' "$1" ;;
+    esac
+}
+
+describe_exit() {
+    if [ "$1" -ge 128 ]; then
+        printf 'killed by %s' "$(signal_name $(($1 - 128)))"
+    else
+        printf '%d' "$1"
+    fi
+}
+
 check() {
     if [ "$2" = "$3" ]; then
         ok "$1"
@@ -178,7 +201,7 @@ shutdown_case() {
         exec 8<&- 2>/dev/null
         exec 8>&- 2>/dev/null
     fi
-    printf '%d' "$rc"
+    describe_exit "$rc"
 }
 
 rc="$(shutdown_case TERM $((PORT + 1)) idle)"
@@ -232,6 +255,12 @@ if grep -q "EADDRINUSE" "$TMP/busy.log"; then
     ok "names EADDRINUSE when the port is taken"
 else
     no "names EADDRINUSE when the port is taken" "$(cat "$TMP/busy.log")"
+fi
+
+if kill -0 "$SRV" 2>/dev/null; then
+    ok "the long running server came through every test alive"
+else
+    no "the long running server came through every test alive" "it exited early"
 fi
 
 kill -9 "$SRV" 2>/dev/null

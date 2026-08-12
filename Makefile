@@ -11,9 +11,13 @@ UNITOBJ  := build/unit.o $(LIBOBJ)
 
 PREFIX  ?= /usr/local
 
-.PHONY: all clean test unit integration install uninstall
+.PHONY: all debug clean test unit integration install uninstall
 
 all: $(BIN)
+
+debug:
+	$(MAKE) clean
+	$(MAKE) ASFLAGS="$(ASFLAGS) -g -F dwarf"
 
 $(BIN): $(OBJ)
 	@mkdir -p bin
