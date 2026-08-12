@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions are numbered vX.0 for a major change, vX.Y for a smaller feature and
 vX.Y.Z for a fix.
 
+## [v1.1] - 2026-08-12
+
+Signal handling. The server can now be stopped properly and can no longer be
+killed by a client that walks away.
+
+### Added
+- SIGINT and SIGTERM close the listening socket and exit with code 0. The
+  handler only sets a flag, and the accept loop acts on it at the top of the
+  next iteration, so nothing unsafe runs inside the handler itself.
+- A read interrupted mid connection checks the same flag instead of retrying,
+  so a shutdown is not held up by an idle client.
+- `src/sig.asm`, which installs handlers and carries the rt_sigreturn stub that
+  x86_64 requires when there is no libc to supply one.
+- Tests for both signals, idle and with a connection open, and a check that the
+  port is bindable again immediately after shutdown.
+- ADR 0006 covering the approach and why SA_RESTART is deliberately not set.
+
+### Fixed
+- SIGPIPE is ignored. Writing to a socket whose peer had reset the connection
+  would terminate the process, so a single client disappearing at the wrong
+  moment could take the server down.
+
 ## [v1.0] - 2026-08-12
 
 First release. A blocking TCP echo server in x86_64 assembly with no libc and
@@ -35,4 +57,5 @@ no dependencies.
   register convention, the blocking accept loop, the absence of TLS and the
   approach to testing.
 
+[v1.1]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.1
 [v1.0]: https://github.com/Elchi-dev/nasmnet/releases/tag/v1.0

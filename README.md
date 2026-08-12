@@ -48,6 +48,11 @@ Exit codes:
 | 1 | the port argument was not usable |
 | 2 | a socket syscall failed, and the message says which one |
 
+SIGINT and SIGTERM stop it cleanly. The listening socket is closed and the
+process exits with code 0, so the port is free again straight away. SIGPIPE is
+ignored, which means a client that disappears mid write costs you that one
+connection and nothing else.
+
 When a syscall fails the server prints the call that failed and the errno by name, so `bind failed: errno 98 (EADDRINUSE)` rather than a bare number you have to go and look up.
 
 ## Testing
@@ -67,6 +72,7 @@ src/nasmnetd.asm   entry point, argument handling, socket setup, accept loop
 src/io.asm         write helpers that survive short writes and signals
 src/str.asm        string length, string compare, port parsing, number formatting
 src/err.asm        errno number to errno name
+src/sig.asm        signal installation, including the restorer x86_64 needs
 src/sys.inc        syscall numbers and socket constants
 tests/unit.asm     unit tests for the helper routines
 tests/run.sh       integration tests over a real socket
@@ -76,7 +82,7 @@ docs/adr/          why the design is the way it is
 ## Roadmap
 
 - **v1.0** blocking echo server, argument handling, errno reporting
-- **v1.1** signal handling and a clean shutdown on SIGINT and SIGTERM
+- **v1.1** signal handling and a clean shutdown on SIGINT and SIGTERM (current)
 - **v1.2** a matching client binary, useful on its own and used by the tests
 - **v2.0** an epoll event loop with non blocking sockets and many concurrent connections
 - **v3.0** HTTP/1.1, a request parser, routing and real responses
